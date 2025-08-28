@@ -18,4 +18,5 @@
 
 ### Current issues/bugs
 - When opening the program the pins might be out of place from the last time you closed/opened the program, I noticed this happen more often when I full screen the program, close the program, then re-open the program and it defaults to a windowed view instead of full screen. **If you maximize and then set it back to windowed mode I found this fixes it for me**
+- The program window is called "OSRS Farming Points" because that's what I was using it for and I'll change it if I re-build the executable at some point but for now I don't care
 - Probably lots of other bugs, this was a quick wip with chatGPT

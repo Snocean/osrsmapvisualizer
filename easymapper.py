@@ -160,35 +160,36 @@ class PinMapperApp:
     def create_pin(self, line_data, pos=None):
         if line_data["pin"]:
             return
-        # Use last_pos if available, otherwise given pos or default
-        if line_data.get("last_pos"):
+
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+
+        # Determine absolute position
+        if pos:  # explicit pos override
+            x, y = pos
+        elif line_data.get("rel_pos"):  # use saved relative position
+            x = line_data["rel_pos"][0] * canvas_width
+            y = line_data["rel_pos"][1] * canvas_height
+        elif line_data.get("last_pos"):  # fallback to last pixel position
             x, y = line_data["last_pos"]
-        else:
-            x, y = pos if pos else (200, 200)
+        else:  # final fallback
+            x, y = 200, 200
 
         theight = 15  # size of the triangle
         twidth = 7
 
-        # Define a simple upward-pointing triangle
         points = [
-        x, y + theight,      # top vertex
-        x - twidth, y - theight,  # bottom-left
-        x + twidth, y - theight   # bottom-right
+            x, y + theight,        # top vertex
+            x - twidth, y - theight,  # bottom-left
+            x + twidth, y - theight   # bottom-right
         ]
 
-        pin = self.canvas.create_polygon(
-        points,
-        fill=line_data["color"],
-        outline="black"
-        )
-        
+        pin = self.canvas.create_polygon(points, fill=line_data["color"], outline="black")
         self.pins[line_data["text"]] = pin
         line_data["pin"] = pin
         line_data["last_pos"] = (x, y)
-        # Convert absolute pixel to relative coordinates
-        line_data["rel_pos"] = (line_data["last_pos"][0] / self.canvas.winfo_width(),
-                                line_data["last_pos"][1] / self.canvas.winfo_height())
-        
+        line_data["rel_pos"] = (x / canvas_width, y / canvas_height)
+
         self.make_draggable(pin, line_data)
 
     def make_draggable(self, pin, line_data):
@@ -224,12 +225,20 @@ class PinMapperApp:
             self.create_pin(line_data)
         else:
             if line_data["pin"]:
-                # before deleting, record last position
+                # Compute centroid of triangle (or center for other shapes)
                 coords = self.canvas.coords(line_data["pin"])
-                line_data["last_pos"] = (
-                    (coords[0] + coords[2]) // 2,
-                    (coords[1] + coords[3]) // 2
-                )
+                if len(coords) >= 6:  # triangle
+                    x = sum(coords[0::2]) / 3
+                    y = sum(coords[1::2]) / 3
+                else:  # fallback
+                    x = (coords[0] + coords[2]) / 2
+                    y = (coords[1] + coords[3]) / 2
+
+                # Update last_pos and rel_pos before deleting
+                line_data["last_pos"] = (x, y)
+                line_data["rel_pos"] = (x / self.canvas.winfo_width(), y / self.canvas.winfo_height())
+
+                # Delete the pin
                 self.canvas.delete(line_data["pin"])
                 line_data["pin"] = None
 
@@ -240,16 +249,25 @@ class PinMapperApp:
     def save_state(self):
         state = []
         for line in self.lines:
-            pin_coords = None
+            # If pin exists, update rel_pos from actual coordinates
             if line["pin"]:
                 coords = self.canvas.coords(line["pin"])
-                pin_coords = ((coords[0]+coords[2])//2, (coords[1]+coords[3])//2)
-
+                # Compute centroid
+                if len(coords) >= 6:  # triangle
+                    x = sum(coords[0::2]) / 3
+                    y = sum(coords[1::2]) / 3
+                else:
+                    x = (coords[0] + coords[2]) / 2
+                    y = (coords[1] + coords[3]) / 2
+                line["last_pos"] = (x, y)
+                line["rel_pos"] = (x / self.canvas.winfo_width(), y / self.canvas.winfo_height())
+            
+            # For hidden pins, last_pos and rel_pos already exist (from toggle_pin)
             state.append({
                 "text": line["text"],
                 "checked": line["var"].get(),
                 "color": line["color"],
-                "rel_pos": line.get("rel_pos")
+                "rel_pos": line.get("rel_pos", (0.5, 0.5))  # fallback
             })
 
         with open(STATE_FILE, "w") as f:
